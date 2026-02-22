@@ -23,7 +23,7 @@ app.add_middleware(
 
 # Case: handles v/v./vs./versus, multiple reporters, pin cites, court parentheticals
 CASE_CITATION_PATTERN = re.compile(
-    r"\b([A-Z][A-Za-z0-9.'&\- ]+\s+(?:v\.?|vs\.?|versus)\s+[A-Z][A-Za-z0-9.'&\- ]+,?\s+\d+\s+[A-Za-z. ]+\s*\d+(?:,\s*\d+)?(?:\s+\([^)]+\d{4}\)))\b",
+    r"\b([A-Z][A-Za-z0-9.'&\- ]+\s+(?:v\.?|vs\.?|versus)\s+[A-Z][A-Za-z0-9.'&\- ]+,?\s+\d+\s+[A-Za-z. ]+\s*\d+(?:,\s*\d+)?(?:\s+\([^)]+\d{4}\))?)\b",
     re.IGNORECASE,
 )
 
@@ -182,9 +182,9 @@ def _extract_text_from_part_xml(part: Any) -> List[str]:
         value = getattr(text_node, "text", None)
         if not isinstance(value, str):
             continue
-        cleaned = value.strip()
-        if cleaned:
-            chunks.append(cleaned)
+        if value.strip():
+            # Preserve run-level spacing; normalization happens after all chunks are joined.
+            chunks.append(value)
     return chunks
 
 
@@ -242,8 +242,8 @@ def _extract_footnote_paragraphs(document: Document) -> List[str]:
 
             for paragraph in footnote.xpath(".//w:p"):
                 runs = [node.text for node in paragraph.xpath(".//w:t") if node.text]
-                text = "".join(runs).strip()
-                if text:
+                text = "".join(runs)
+                if text.strip():
                     paragraphs.append(text)
 
     return paragraphs
