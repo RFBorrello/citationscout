@@ -112,6 +112,7 @@ td {
   border-bottom: 1px solid #e2e8f0;
   padding: 10px;
   text-align: left;
+  vertical-align: top;
 }
 
 thead th {
@@ -151,6 +152,10 @@ thead th {
 
 .empty {
   color: #64748b;
+}
+
+.table-wrap td {
+  word-break: break-word;
 }
 
 .debug-panel {

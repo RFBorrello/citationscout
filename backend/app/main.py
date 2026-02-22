@@ -89,6 +89,19 @@ CONSTITUTIONAL_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+PATTERN_SPECS = [
+    ("case", CASE_CITATION_PATTERN),
+    ("case_short", SHORT_FORM_PATTERN),
+    ("statute", STATUTE_CITATION_PATTERN),
+    ("statute_state", STATE_STATUTE_PATTERN),
+    ("regulation", REGULATION_CITATION_PATTERN),
+    ("regulation_state", STATE_REG_PATTERN),
+    ("law_review", LAW_REVIEW_PATTERN),
+    ("agency_publication", AGENCY_PUBLICATION_PATTERN),
+    ("foreign_law", FOREIGN_LAW_PATTERN),
+    ("constitutional", CONSTITUTIONAL_PATTERN),
+]
+
 
 def mock_validation_status(citation_text: str) -> str:
     digest = hashlib.md5(citation_text.encode("utf-8")).hexdigest()
@@ -117,6 +130,22 @@ def find_citations(text: str, citation_type: str, pattern: re.Pattern[str]) -> L
             )
 
     return matches
+
+
+def build_pattern_diagnostics(
+    text: str, pattern_specs: List[tuple[str, re.Pattern[str]]], sample_limit: int = 5
+) -> List[Dict[str, object]]:
+    diagnostics: List[Dict[str, object]] = []
+    for citation_type, pattern in pattern_specs:
+        matches = find_citations(text, citation_type, pattern)
+        diagnostics.append(
+            {
+                "type": citation_type,
+                "match_count": len(matches),
+                "samples": [item["text"] for item in matches[:sample_limit]],
+            }
+        )
+    return diagnostics
 
 
 def _extract_non_empty_paragraphs(paragraphs: Iterable[object]) -> List[str]:
@@ -247,16 +276,8 @@ async def upload_docx(file: UploadFile = File(...)) -> Dict[str, object]:
     text = await read_docx_upload(file)
 
     citations = []
-    citations.extend(find_citations(text, "case", CASE_CITATION_PATTERN))
-    citations.extend(find_citations(text, "case_short", SHORT_FORM_PATTERN))
-    citations.extend(find_citations(text, "statute", STATUTE_CITATION_PATTERN))
-    citations.extend(find_citations(text, "statute_state", STATE_STATUTE_PATTERN))
-    citations.extend(find_citations(text, "regulation", REGULATION_CITATION_PATTERN))
-    citations.extend(find_citations(text, "regulation_state", STATE_REG_PATTERN))
-    citations.extend(find_citations(text, "law_review", LAW_REVIEW_PATTERN))
-    citations.extend(find_citations(text, "agency_publication", AGENCY_PUBLICATION_PATTERN))
-    citations.extend(find_citations(text, "foreign_law", FOREIGN_LAW_PATTERN))
-    citations.extend(find_citations(text, "constitutional", CONSTITUTIONAL_PATTERN))
+    for citation_type, pattern in PATTERN_SPECS:
+        citations.extend(find_citations(text, citation_type, pattern))
 
     return {
         "filename": file.filename,
@@ -269,8 +290,10 @@ async def upload_docx(file: UploadFile = File(...)) -> Dict[str, object]:
 @app.post("/debug")
 async def debug_docx(file: UploadFile = File(...)) -> Dict[str, object]:
     text = await read_docx_upload(file)
+    pattern_diagnostics = build_pattern_diagnostics(text, PATTERN_SPECS)
     return {
         "filename": file.filename,
         "raw_extracted_text": text,
         "character_count": len(text),
+        "pattern_diagnostics": pattern_diagnostics,
     }

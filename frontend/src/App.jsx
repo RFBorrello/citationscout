@@ -177,6 +177,34 @@ function App() {
                 <strong>Extracted characters:</strong> {debugResult.character_count}
               </p>
             </div>
+
+            {Array.isArray(debugResult.pattern_diagnostics) ? (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Pattern</th>
+                      <th>Matches</th>
+                      <th>Sample Matches</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {debugResult.pattern_diagnostics.map((item) => (
+                      <tr key={item.type}>
+                        <td className="capitalize">{item.type.replaceAll("_", " ")}</td>
+                        <td>{item.match_count}</td>
+                        <td>
+                          {item.samples?.length
+                            ? item.samples.join(" | ")
+                            : "No matches for this pattern"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+
             <div className="debug-panel">
               <h2>Extracted Text Preview</h2>
               <pre>{debugResult.raw_extracted_text.slice(0, 4000)}</pre>
