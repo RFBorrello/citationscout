@@ -3,6 +3,7 @@
 import hashlib
 import io
 import re
+from collections.abc import Iterable
 from typing import Dict, List
 
 from docx import Document
@@ -118,14 +119,65 @@ def find_citations(text: str, citation_type: str, pattern: re.Pattern[str]) -> L
     return matches
 
 
+def _extract_non_empty_paragraphs(paragraphs: Iterable[object]) -> List[str]:
+    texts = []
+    for paragraph in paragraphs:
+        value = getattr(paragraph, "text", "")
+        if not isinstance(value, str):
+            continue
+        cleaned = value.strip()
+        if cleaned:
+            texts.append(cleaned)
+    return texts
+
+
+def _extract_footnote_paragraphs(document: Document) -> List[str]:
+    """Extract footnote text directly from DOCX relationships/XML."""
+    paragraphs = []
+
+    for rel in document.part.rels.values():
+        if not rel.reltype.endswith("/footnotes"):
+            continue
+
+        footnotes_part = rel.target_part
+        if not hasattr(footnotes_part, "element"):
+            continue
+
+        for footnote in footnotes_part.element.xpath(".//w:footnote"):
+            # Skip separator/continuation entries and keep only user-authored footnotes.
+            footnote_type = footnote.get("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}type")
+            if footnote_type:
+                continue
+
+            for paragraph in footnote.xpath(".//w:p"):
+                runs = [node.text for node in paragraph.xpath(".//w:t") if node.text]
+                text = "".join(runs).strip()
+                if text:
+                    paragraphs.append(text)
+
+    return paragraphs
+
+
 def extract_docx_text(file_bytes: bytes) -> str:
     try:
         document = Document(io.BytesIO(file_bytes))
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Unable to parse .docx file.") from exc
 
-    paragraphs = [p.text.strip() for p in document.paragraphs if p.text.strip()]
-    return "\n".join(paragraphs)
+    extracted_chunks = []
+
+    # Main body paragraphs.
+    extracted_chunks.extend(_extract_non_empty_paragraphs(document.paragraphs))
+
+    # Include header/footer text because legal references can appear there.
+    for section in document.sections:
+        extracted_chunks.extend(_extract_non_empty_paragraphs(section.header.paragraphs))
+        extracted_chunks.extend(_extract_non_empty_paragraphs(section.footer.paragraphs))
+
+    # Include footnotes; law review citations are frequently contained in footnotes.
+    extracted_chunks.extend(_extract_footnote_paragraphs(document))
+
+    return "\n".join(extracted_chunks)
 
 
 @app.get("/health")
