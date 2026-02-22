@@ -58,7 +58,7 @@ STATE_REG_PATTERN = re.compile(
 
 # Law review articles
 LAW_REVIEW_PATTERN = re.compile(
-    r"\b((?:(?:[A-Z][A-Za-z.'\- ]+,\s+)?(?:\"[^\"]+\"|[A-Z][^,\n]{3,140}),\s+)?\d{1,3}\s+[A-Z][A-Za-z.&'\- ]+L\.?\s*Rev\.?\s+\d{1,5}(?:,\s*\d{1,5})?(?:\s*\(\d{4}\))?)\b"
+    r"\b((?:(?:[A-Z][A-Za-z.'\- ]+(?:,\s*(?:Jr\.?|Sr\.?|II|III|IV|V))?,\s+)?(?:\"[^\"]+\"|[A-Z][^,\n]{3,180}),\s+)?\d{1,3}\s+[A-Z][A-Za-z.&'\- ]+L\.?\s*Rev\.?\s+\d{1,5}(?:,\s*\d{1,5})?(?:\s*\(\d{4}\))?)\b"
 )
 
 # Agency publications (Federal Register, SEC/FDA/EPA docs)
@@ -201,7 +201,8 @@ def normalize_extracted_text(text: str) -> str:
         "\ufeff": "",
     }
     normalized = text.translate(str.maketrans(replacements))
-    return re.sub(r"[ \t]+", " ", normalized)
+    # DOCX runs frequently introduce line breaks mid-citation; collapse all whitespace.
+    return re.sub(r"\s+", " ", normalized).strip()
 
 
 def _extract_footnote_paragraphs(document: Document) -> List[str]:
