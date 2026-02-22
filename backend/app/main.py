@@ -148,6 +148,18 @@ def build_pattern_diagnostics(
     return diagnostics
 
 
+def build_signal_counts(text: str) -> Dict[str, int]:
+    probes = {
+        "has_v_connector": r"\b(?:v\.?|vs\.?|versus)\b",
+        "has_law_review_token": r"\bL\.?\s*Rev\.?\b",
+        "has_usc_token": r"\bU\.?\s*S\.?\s*C\.?\b",
+        "has_cfr_token": r"\bC\.?\s*F\.?\s*R\.?\b",
+        "has_section_symbol": r"\u00A7",
+        "has_year_paren": r"\(\d{4}\)",
+    }
+    return {name: len(re.findall(pattern, text, flags=re.IGNORECASE)) for name, pattern in probes.items()}
+
+
 def _extract_non_empty_paragraphs(paragraphs: Iterable[object]) -> List[str]:
     texts = []
     for paragraph in paragraphs:
@@ -201,8 +213,13 @@ def normalize_extracted_text(text: str) -> str:
         "\ufeff": "",
     }
     normalized = text.translate(str.maketrans(replacements))
-    # DOCX runs frequently introduce line breaks mid-citation; collapse all whitespace.
-    return re.sub(r"\s+", " ", normalized).strip()
+    # DOCX runs frequently introduce line breaks and spacing inside legal abbreviations.
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    normalized = re.sub(r"\s+([,.;:)\]])", r"\1", normalized)
+    normalized = re.sub(r"([(\[])\s+", r"\1", normalized)
+    normalized = re.sub(r"\b([A-Za-z])\s*\.\s*(?=[A-Za-z])", r"\1.", normalized)
+    normalized = re.sub(r"\b([A-Za-z])\s*\.\s*(?=\d)", r"\1.", normalized)
+    return normalized
 
 
 def _extract_footnote_paragraphs(document: Document) -> List[str]:
@@ -296,5 +313,6 @@ async def debug_docx(file: UploadFile = File(...)) -> Dict[str, object]:
         "filename": file.filename,
         "raw_extracted_text": text,
         "character_count": len(text),
+        "signal_counts": build_signal_counts(text),
         "pattern_diagnostics": pattern_diagnostics,
     }

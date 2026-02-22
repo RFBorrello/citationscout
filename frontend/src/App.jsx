@@ -178,6 +178,16 @@ function App() {
               </p>
             </div>
 
+            {debugResult.signal_counts ? (
+              <div className="summary">
+                {Object.entries(debugResult.signal_counts).map(([key, value]) => (
+                  <span key={key}>
+                    {key.replaceAll("_", " ")}: {value}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+
             {Array.isArray(debugResult.pattern_diagnostics) ? (
               <div className="table-wrap">
                 <table>
