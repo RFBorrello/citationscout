@@ -54,6 +54,10 @@ button {
   cursor: pointer;
 }
 
+button.secondary {
+  background: #0f766e;
+}
+
 button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -147,4 +151,29 @@ thead th {
 
 .empty {
   color: #64748b;
+}
+
+.debug-panel {
+  margin-top: 16px;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.debug-panel h2 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.debug-panel pre {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: #334155;
 }

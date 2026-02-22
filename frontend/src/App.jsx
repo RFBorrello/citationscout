@@ -10,9 +10,10 @@ const statusClassMap = {
 
 function App() {
   const [file, setFile] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingAction, setLoadingAction] = useState("");
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
+  const [debugResult, setDebugResult] = useState(null);
 
   const summary = useMemo(() => {
     if (!result?.citations) {
@@ -28,36 +29,58 @@ function App() {
     );
   }, [result]);
 
-  const onSubmit = async (event) => {
-    event.preventDefault();
-    setError("");
-    setResult(null);
-
+  const uploadToEndpoint = async (endpoint) => {
     if (!file) {
       setError("Select a .docx file before uploading.");
-      return;
+      return null;
     }
 
     const formData = new FormData();
     formData.append("file", file);
 
-    setLoading(true);
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: "POST",
+      body: formData,
+    });
+
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.detail || "Upload failed.");
+    }
+
+    return payload;
+  };
+
+  const onSubmit = async (event) => {
+    event.preventDefault();
+    setError("");
+    setResult(null);
+    setDebugResult(null);
+
+    setLoadingAction("upload");
     try {
-      const response = await fetch(`${API_BASE_URL}/upload`, {
-        method: "POST",
-        body: formData,
-      });
-
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.detail || "Upload failed.");
-      }
-
+      const payload = await uploadToEndpoint("/upload");
       setResult(payload);
     } catch (err) {
       setError(err.message || "Unexpected error while uploading.");
     } finally {
-      setLoading(false);
+      setLoadingAction("");
+    }
+  };
+
+  const onDebug = async () => {
+    setError("");
+    setResult(null);
+    setDebugResult(null);
+
+    setLoadingAction("debug");
+    try {
+      const payload = await uploadToEndpoint("/debug");
+      setDebugResult(payload);
+    } catch (err) {
+      setError(err.message || "Unexpected error while uploading.");
+    } finally {
+      setLoadingAction("");
     }
   };
 
@@ -75,8 +98,16 @@ function App() {
             accept=".docx"
             onChange={(event) => setFile(event.target.files?.[0] || null)}
           />
-          <button type="submit" disabled={loading}>
-            {loading ? "Processing..." : "Upload & Extract"}
+          <button type="submit" disabled={Boolean(loadingAction)}>
+            {loadingAction === "upload" ? "Processing..." : "Upload & Extract"}
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            disabled={Boolean(loadingAction)}
+            onClick={onDebug}
+          >
+            {loadingAction === "debug" ? "Processing..." : "Run Debug Extract"}
           </button>
         </form>
 
@@ -132,6 +163,23 @@ function App() {
                   )}
                 </tbody>
               </table>
+            </div>
+          </section>
+        ) : null}
+
+        {debugResult ? (
+          <section className="results">
+            <div className="meta">
+              <p>
+                <strong>Debug file:</strong> {debugResult.filename}
+              </p>
+              <p>
+                <strong>Extracted characters:</strong> {debugResult.character_count}
+              </p>
+            </div>
+            <div className="debug-panel">
+              <h2>Extracted Text Preview</h2>
+              <pre>{debugResult.raw_extracted_text.slice(0, 4000)}</pre>
             </div>
           </section>
         ) : null}

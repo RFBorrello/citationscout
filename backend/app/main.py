@@ -4,7 +4,7 @@ import hashlib
 import io
 import re
 from collections.abc import Iterable
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from docx import Document
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -131,6 +131,50 @@ def _extract_non_empty_paragraphs(paragraphs: Iterable[object]) -> List[str]:
     return texts
 
 
+def _extract_text_from_part_xml(part: Any) -> List[str]:
+    """Extract visible text runs from a DOCX XML part."""
+    if not hasattr(part, "element"):
+        return []
+
+    chunks = []
+    for text_node in part.element.xpath(".//w:t"):
+        value = getattr(text_node, "text", None)
+        if not isinstance(value, str):
+            continue
+        cleaned = value.strip()
+        if cleaned:
+            chunks.append(cleaned)
+    return chunks
+
+
+def _extract_related_part_text(document: Document) -> List[str]:
+    """Collect text from related parts (headers, footers, notes, comments)."""
+    texts = []
+    rel_suffixes = ("/header", "/footer", "/footnotes", "/endnotes", "/comments")
+
+    for rel in document.part.rels.values():
+        if not rel.reltype.endswith(rel_suffixes):
+            continue
+        texts.extend(_extract_text_from_part_xml(rel.target_part))
+
+    return texts
+
+
+def normalize_extracted_text(text: str) -> str:
+    # Normalize uncommon whitespace so regex matching remains reliable.
+    replacements = {
+        "\u00a0": " ",
+        "\u2007": " ",
+        "\u2009": " ",
+        "\u200a": " ",
+        "\u202f": " ",
+        "\u2060": "",
+        "\ufeff": "",
+    }
+    normalized = text.translate(str.maketrans(replacements))
+    return re.sub(r"[ \t]+", " ", normalized)
+
+
 def _extract_footnote_paragraphs(document: Document) -> List[str]:
     """Extract footnote text directly from DOCX relationships/XML."""
     paragraphs = []
@@ -166,18 +210,20 @@ def extract_docx_text(file_bytes: bytes) -> str:
 
     extracted_chunks = []
 
-    # Main body paragraphs.
+    # Pull all visible text runs from the main document XML (captures tables too).
+    extracted_chunks.extend(_extract_text_from_part_xml(document.part))
+
+    # Main body paragraphs retained as a fallback for odd DOCX encodings.
     extracted_chunks.extend(_extract_non_empty_paragraphs(document.paragraphs))
 
-    # Include header/footer text because legal references can appear there.
-    for section in document.sections:
-        extracted_chunks.extend(_extract_non_empty_paragraphs(section.header.paragraphs))
-        extracted_chunks.extend(_extract_non_empty_paragraphs(section.footer.paragraphs))
-
-    # Include footnotes; law review citations are frequently contained in footnotes.
+    # Include footnotes explicitly; law review citations are frequently contained there.
     extracted_chunks.extend(_extract_footnote_paragraphs(document))
 
-    return "\n".join(extracted_chunks)
+    # Include related text-bearing parts (headers, footers, endnotes, comments).
+    extracted_chunks.extend(_extract_related_part_text(document))
+
+    joined = "\n".join(extracted_chunks)
+    return normalize_extracted_text(joined)
 
 
 @app.get("/health")
